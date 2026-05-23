@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from .models import query_openai, query_anthropic
 from .judge import evaluate_responses, meta_evaluate
+from .output import save_benchmark_results
 
 
 # Default configuration
@@ -70,7 +71,10 @@ def run_benchmark(
     question_generator: str = QUESTION_GENERATOR,
     evaluator_model: str = EVALUATOR,
     meta_evaluator_model: str = META_EVALUATOR,
-    verbose: bool = True
+    verbose: bool = True,
+    save_output: bool = True,
+    output_dir: str = "output",
+    max_output_files: int = 3,
 ) -> dict:
     """
     Run the full benchmark pipeline.
@@ -129,8 +133,8 @@ def run_benchmark(
         print(f"\n{'=' * 50}")
         print(f"META-EVALUATOR SCORE: {meta_score}")
         print(f"{'=' * 50}")
-    
-    return {
+
+    results = {
         "question": question,
         "competitors": competitors,
         "answers": answers,
@@ -141,8 +145,18 @@ def run_benchmark(
             "answerers": answerers or ANSWERERS,
             "evaluator": evaluator_model,
             "meta_evaluator": meta_evaluator_model,
-        }
+        },
     }
+
+    if save_output:
+        output_path = save_benchmark_results(
+            results, output_dir=output_dir, max_files=max_output_files
+        )
+        results["output_file"] = str(output_path)
+        if verbose:
+            print(f"\nResults saved to: {output_path}")
+
+    return results
 
 
 if __name__ == "__main__":
