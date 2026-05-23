@@ -1,105 +1,147 @@
-"""Main benchmark logic for comparing LLM reasoning capabilities."""
+"""
+LLM Reasoning Benchmark
 
-import os
+Pipeline:
+1. GPT-5 (strong) generates a challenging reasoning question
+2. GPT-5-nano and Claude Haiku (weak) answer the question
+3. GPT-5 evaluates the answers
+4. Claude Opus 4.7 meta-evaluates the evaluator's response
+"""
+
 from dotenv import load_dotenv
-from openai import OpenAI
 
-from .models import query_model
-from .judge import evaluate_responses
+from .models import query_openai, query_anthropic
+from .judge import evaluate_responses, meta_evaluate
 
 
-DEFAULT_MODELS = [
-    ("openai", "gpt-4o-mini"),
+# Default configuration
+QUESTION_GENERATOR = "gpt-5"
+ANSWERERS = [
+    ("openai", "gpt-5-nano"),
     ("anthropic", "claude-haiku-4-5"),
 ]
+EVALUATOR = "gpt-5"
+META_EVALUATOR = "claude-opus-4-7"
 
 
-def generate_question(model: str = "gpt-4o-mini") -> str:
-    """Generate a challenging reasoning question using GPT."""
-    client = OpenAI()
-    
+def generate_question(model: str = QUESTION_GENERATOR) -> str:
+    """Generate a challenging reasoning question using a strong model."""
     request = (
-        "Please come up with a challenging, nuanced question that I can ask "
+        "Please come up with a challenging nuanced question that I can ask "
         "a number of LLMs to evaluate their intelligence in general reasoning. "
         "Answer only with the question, no explanation."
     )
     
     messages = [{"role": "user", "content": request}]
-    response = client.chat.completions.create(model=model, messages=messages)
+    return query_openai(model, messages)
+
+
+def get_answers(question: str, answerers: list[tuple[str, str]] = None) -> tuple[list[str], list[str]]:
+    """
+    Get answers from the weak models.
     
-    return response.choices[0].message.content
+    Returns (competitors, answers) lists.
+    """
+    if answerers is None:
+        answerers = ANSWERERS
+    
+    competitors = []
+    answers = []
+    
+    messages = [{"role": "user", "content": question}]
+    
+    for provider, model in answerers:
+        if provider == "openai":
+            answer = query_openai(model, messages)
+        elif provider == "anthropic":
+            answer = query_anthropic(model, messages)
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+        
+        competitors.append(model)
+        answers.append(answer)
+    
+    return competitors, answers
 
 
 def run_benchmark(
-    models: list[tuple[str, str]] | None = None,
-    question: str | None = None,
-    judge_model: str = "gpt-4o-mini",
+    question: str = None,
+    answerers: list[tuple[str, str]] = None,
+    question_generator: str = QUESTION_GENERATOR,
+    evaluator_model: str = EVALUATOR,
+    meta_evaluator_model: str = META_EVALUATOR,
     verbose: bool = True
 ) -> dict:
     """
-    Run the full benchmark: generate question, query models, judge responses.
+    Run the full benchmark pipeline.
     
-    Args:
-        models: List of (provider, model_name) tuples. Defaults to GPT-4o-mini and Claude Haiku.
-        question: Custom question to use. If None, generates one.
-        judge_model: Model to use for judging. Defaults to gpt-4o-mini.
-        verbose: Whether to print progress.
+    Pipeline:
+    1. Generate challenging question (GPT-5)
+    2. Get answers from weak models (nano, haiku)
+    3. Evaluate answers (GPT-5)
+    4. Meta-evaluate the evaluation (Opus 4.7)
     
-    Returns:
-        dict with question, competitors, answers, and rankings.
+    Returns dict with all results.
     """
     load_dotenv(override=True)
     
-    if models is None:
-        models = DEFAULT_MODELS
-    
+    # Step 1: Generate question
     if question is None:
         if verbose:
-            print("Generating challenge question...")
-        question = generate_question()
+            print(f"Generating question with {question_generator}...")
+        question = generate_question(question_generator)
     
     if verbose:
         print(f"\nQuestion: {question}\n")
     
-    competitors = []
-    answers = []
-    messages = [{"role": "user", "content": question}]
+    # Step 2: Get answers from weak models
+    if verbose:
+        print("Getting answers from weak models...")
     
-    for provider, model_name in models:
-        if verbose:
-            print(f"Querying {model_name}...")
-        try:
-            answer = query_model(provider, model_name, messages)
-            competitors.append(model_name)
-            answers.append(answer)
-            if verbose:
-                print(f"  Got response ({len(answer)} chars)")
-        except Exception as e:
-            if verbose:
-                print(f"  Error: {e}")
-    
-    if len(answers) < 2:
-        raise ValueError("Need at least 2 successful responses to judge")
+    competitors, answers = get_answers(question, answerers)
     
     if verbose:
-        print(f"\nJudging with {judge_model}...")
+        for comp, ans in zip(competitors, answers):
+            print(f"\n--- {comp} ---")
+            print(ans[:300] + "..." if len(ans) > 300 else ans)
     
-    evaluation = evaluate_responses(question, competitors, answers, judge_model)
+    # Step 3: Evaluate with strong model
+    if verbose:
+        print(f"\n\nEvaluating with {evaluator_model}...")
+    
+    evaluator_response = evaluate_responses(
+        question, competitors, answers, evaluator_model
+    )
     
     if verbose:
-        print("\n" + "=" * 50)
-        print("RESULTS")
-        print("=" * 50)
-        for idx, model in enumerate(evaluation["rankings"]):
-            print(f"  Rank {idx + 1}: {model}")
-        print("=" * 50)
+        print(f"\n--- Evaluator Response ---")
+        print(evaluator_response[:500] + "..." if len(evaluator_response) > 500 else evaluator_response)
+    
+    # Step 4: Meta-evaluate with Opus
+    if verbose:
+        print(f"\n\nMeta-evaluating with {meta_evaluator_model}...")
+    
+    meta_score = meta_evaluate(
+        question, competitors, answers, evaluator_response, meta_evaluator_model
+    )
+    
+    if verbose:
+        print(f"\n{'=' * 50}")
+        print(f"META-EVALUATOR SCORE: {meta_score}")
+        print(f"{'=' * 50}")
     
     return {
         "question": question,
         "competitors": competitors,
         "answers": answers,
-        "rankings": evaluation["rankings"],
-        "raw_judge_response": evaluation["raw_response"]
+        "evaluator_response": evaluator_response,
+        "meta_evaluator_score": meta_score,
+        "config": {
+            "question_generator": question_generator,
+            "answerers": answerers or ANSWERERS,
+            "evaluator": evaluator_model,
+            "meta_evaluator": meta_evaluator_model,
+        }
     }
 
 

@@ -2,7 +2,11 @@
 """
 LLM Reasoning Benchmark
 
-Compare reasoning capabilities across different language models.
+Default pipeline:
+- Question Generator: GPT-5 (strong)
+- Answerers: GPT-5-nano, Claude Haiku (weak)
+- Evaluator: GPT-5 (strong)
+- Meta-Evaluator: Claude Opus 4.7 (strongest)
 """
 
 from src.benchmark import run_benchmark
@@ -10,20 +14,23 @@ from src.benchmark import run_benchmark
 
 def main():
     """Run the benchmark with default settings."""
+    print("=" * 60)
+    print("LLM REASONING BENCHMARK")
+    print("=" * 60)
+    print("\nPipeline:")
+    print("  1. GPT-5 generates challenging question")
+    print("  2. GPT-5-nano & Claude Haiku answer")
+    print("  3. GPT-5 evaluates the answers")
+    print("  4. Claude Opus 4.7 meta-evaluates")
+    print("=" * 60 + "\n")
     
-    models = [
-        ("openai", "gpt-4o-mini"),
-        ("anthropic", "claude-haiku-4-5"),
-    ]
+    results = run_benchmark(verbose=True)
     
-    results = run_benchmark(models=models, verbose=True)
-    
-    print("\n\nDetailed Responses:")
-    print("-" * 50)
-    for model, answer in zip(results["competitors"], results["answers"]):
-        print(f"\n### {model}\n")
-        print(answer[:500] + "..." if len(answer) > 500 else answer)
-        print()
+    print("\n\n" + "=" * 60)
+    print("FULL RESULTS SUMMARY")
+    print("=" * 60)
+    print(f"\nQuestion: {results['question']}")
+    print(f"\nMeta-Evaluator Score: {results['meta_evaluator_score']}/100")
 
 
 if __name__ == "__main__":

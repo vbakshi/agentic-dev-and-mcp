@@ -1,56 +1,85 @@
 # LLM Reasoning Benchmark
 
-Compare reasoning capabilities across different large language models by generating challenging questions, collecting responses, and having a judge model rank the results.
+A multi-layer evaluation pipeline that tests LLM reasoning capabilities by having weak models answer challenging questions, then evaluating and meta-evaluating the results.
 
-## How It Works
+## Pipeline Architecture
 
 ```
-┌─────────────────┐
-│  Generate       │
-│  Challenge      │──────────────────────────────────────┐
-│  Question       │                                      │
-└────────┬────────┘                                      │
-         │                                               │
-         ▼                                               ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   GPT-4o-mini   │    │  Claude Haiku   │    │   Other Models  │
-│                 │    │                 │    │   (optional)    │
-└────────┬────────┘    └────────┬────────┘    └────────┬────────┘
-         │                      │                      │
-         └──────────────────────┼──────────────────────┘
-                                │
-                                ▼
-                    ┌─────────────────────┐
-                    │   Judge (GPT-4o)    │
-                    │   Evaluates &       │
-                    │   Ranks Responses   │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Final Rankings    │
-                    └─────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    QUESTION GENERATION                       │
+│                        GPT-5 (strong)                        │
+│         "Generate a challenging reasoning question"          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+        ┌─────────────────────────────────────┐
+        │         ANSWERING (weak models)      │
+        ├──────────────────┬──────────────────┤
+        │   GPT-5-nano     │   Claude Haiku   │
+        └────────┬─────────┴────────┬─────────┘
+                 │                  │
+                 └────────┬─────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       EVALUATION                             │
+│                        GPT-5 (strong)                        │
+│         "Evaluate accuracy and explanation quality"          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    META-EVALUATION                           │
+│                   Claude Opus 4.7 (strongest)                │
+│         "Score the evaluator's response (0-100)"             │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+## Default Configuration
+
+| Role | Model | Purpose |
+|------|-------|---------|
+| Question Generator | GPT-5 | Creates challenging reasoning questions |
+| Answerer 1 | GPT-5-nano | Weak model - tests basic reasoning |
+| Answerer 2 | Claude Haiku 4.5 | Weak model - tests basic reasoning |
+| Evaluator | GPT-5 | Assesses answer accuracy and explanations |
+| Meta-Evaluator | Claude Opus 4.7 | Scores the evaluator (0-100) |
 
 ## Sample Output
 
 ```
-Generating challenge question...
+==============================================================
+LLM REASONING BENCHMARK
+==============================================================
 
-Question: A farmer has 17 sheep. All but 9 die. How many sheep does the farmer have left?
+Pipeline:
+  1. GPT-5 generates challenging question
+  2. GPT-5-nano & Claude Haiku answer
+  3. GPT-5 evaluates the answers
+  4. Claude Opus 4.7 meta-evaluates
+==============================================================
 
-Querying gpt-4o-mini...
-  Got response (234 chars)
-Querying claude-haiku-4-5...
-  Got response (189 chars)
+Generating question with gpt-5...
 
-Judging with gpt-4o-mini...
+Question: A three-digit number is such that the sum of its digits is 18...
+
+Getting answers from weak models...
+
+--- gpt-5-nano ---
+Let me work through this step by step...
+
+--- claude-haiku-4-5 ---
+I'll solve this systematically...
+
+Evaluating with gpt-5...
+
+--- Evaluator Response ---
+Both models approached the problem correctly, however...
+
+Meta-evaluating with claude-opus-4-7...
 
 ==================================================
-RESULTS
-==================================================
-  Rank 1: claude-haiku-4-5
-  Rank 2: gpt-4o-mini
+META-EVALUATOR SCORE: 85
 ==================================================
 ```
 
@@ -75,47 +104,34 @@ RESULTS
 4. **Configure API keys**
    ```bash
    cp .env.example .env
-   # Edit .env with your API keys
+   # Edit .env with your OpenAI and Anthropic API keys
    ```
 
 ## Usage
 
-### Run the default benchmark
+### Run with defaults
 ```bash
 python main.py
 ```
 
-### Use as a library
+### Customize the pipeline
 ```python
 from src.benchmark import run_benchmark
 
-# Run with default models (GPT-4o-mini vs Claude Haiku)
-results = run_benchmark()
-
-# Or specify your own models
 results = run_benchmark(
-    models=[
-        ("openai", "gpt-4o-mini"),
-        ("anthropic", "claude-sonnet-4-5"),
-        ("gemini", "gemini-2.5-flash"),
+    question="Your custom question here",  # Or None to generate
+    answerers=[
+        ("openai", "gpt-5-nano"),
+        ("anthropic", "claude-haiku-4-5"),
     ],
-    question="What is the meaning of life?",  # Optional custom question
+    question_generator="gpt-5",
+    evaluator_model="gpt-5",
+    meta_evaluator_model="claude-opus-4-7",
     verbose=True
 )
 
-print(results["rankings"])
+print(f"Meta-evaluator score: {results['meta_evaluator_score']}")
 ```
-
-### Supported Providers
-
-| Provider | Example Models | API Key Required |
-|----------|---------------|------------------|
-| `openai` | gpt-4o-mini, gpt-4o | OPENAI_API_KEY |
-| `anthropic` | claude-haiku-4-5, claude-sonnet-4-5 | ANTHROPIC_API_KEY |
-| `gemini` | gemini-2.5-flash | GOOGLE_API_KEY |
-| `deepseek` | deepseek-chat | DEEPSEEK_API_KEY |
-| `groq` | llama-3.1-70b-versatile | GROQ_API_KEY |
-| `ollama` | llama3.2, mistral | None (local) |
 
 ## Project Structure
 
@@ -123,9 +139,9 @@ print(results["rankings"])
 llm-reasoning-benchmark/
 ├── main.py              # Entry point
 ├── src/
-│   ├── benchmark.py     # Main benchmark orchestration
-│   ├── models.py        # Model client configurations
-│   └── judge.py         # Evaluation logic
+│   ├── benchmark.py     # Pipeline orchestration
+│   ├── models.py        # OpenAI/Anthropic query functions
+│   └── judge.py         # Evaluator & meta-evaluator logic
 ├── requirements.txt
 └── .env.example
 ```
@@ -134,4 +150,4 @@ llm-reasoning-benchmark/
 
 ## Credits
 
-This project was built while taking the [Agentic AI course by Ed Donner](https://github.com/ed-donner/agents). The course covers foundations of building AI agents, including multi-model orchestration patterns demonstrated here.
+Built while taking the [Agentic AI course by Ed Donner](https://github.com/ed-donner/agents). This project demonstrates multi-model orchestration and evaluation patterns.

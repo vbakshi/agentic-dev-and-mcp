@@ -1,64 +1,75 @@
-"""Evaluation and judging logic for LLM responses."""
+"""Evaluation and meta-evaluation logic for LLM responses."""
 
-import json
-from openai import OpenAI
+from .models import query_openai, query_anthropic
 
 
-def build_judge_prompt(question: str, competitors: list[str], answers: list[str]) -> str:
-    """Build the prompt for the judge to evaluate responses."""
-    responses_text = ""
-    for idx, answer in enumerate(answers):
-        responses_text += f"# Response from competitor {idx + 1}\n\n{answer}\n\n"
+def build_evaluator_prompt(
+    question: str,
+    competitors: list[str],
+    answers: list[str]
+) -> str:
+    """Build the prompt for the evaluator to assess responses."""
+    content = f"Please evaluate the answers to the question: {question} "
+    content += "from the following list of competitor LLMs and evaluate the accuracy and explanation of the answers\n\n"
     
-    return f"""You are judging a competition between {len(competitors)} competitors.
-Each model has been given this question:
+    for competitor, answer in zip(competitors, answers):
+        content += f"Competitor: {competitor}\n\nAnswer: {answer}\n\n"
+    
+    return content
 
-{question}
 
-Your job is to evaluate each response for clarity and strength of argument, and rank them in order of best to worst.
-Respond with JSON, and only JSON, with the following format:
-{{"results": ["best competitor number", "second best competitor number", "third best competitor number", ...]}}
-
-Here are the responses from each competitor:
-
-{responses_text}
-
-Now respond with the JSON with the ranked order of the competitors, nothing else. Do not include markdown formatting or code blocks."""
+def build_meta_evaluator_prompt(
+    question: str,
+    competitors: list[str],
+    answers: list[str],
+    evaluator_response: str
+) -> str:
+    """Build the prompt for the meta-evaluator to assess the evaluator."""
+    content = f"You are evaluating an evaluator's response to the evaluation of {len(competitors)} answers "
+    content += f"from LLMs to the question: {question}\n\n"
+    content += "Answers from LLMs:\n\n"
+    
+    for competitor, answer in zip(competitors, answers):
+        content += f"Competitor: {competitor}\n\nAnswer: {answer}\n\n"
+    
+    content += f"And the evaluator's response is: {evaluator_response}\n\n"
+    content += "Please evaluate the evaluator's response, and provide a score between 0 and 100, "
+    content += "where 0 is the worst and 100 is the best.\n\n"
+    content += "Respond only with the score, no explanation."
+    
+    return content
 
 
 def evaluate_responses(
     question: str,
     competitors: list[str],
     answers: list[str],
-    judge_model: str = "gpt-4o-mini"
-) -> dict:
+    evaluator_model: str = "gpt-5"
+) -> str:
     """
-    Have a judge model evaluate and rank the responses.
+    Have the evaluator model assess the responses.
     
-    Returns a dict with:
-        - rankings: list of model names in order from best to worst
-        - raw_response: the raw JSON response from the judge
+    Returns the evaluator's detailed assessment.
     """
-    client = OpenAI()
+    prompt = build_evaluator_prompt(question, competitors, answers)
+    messages = [{"role": "user", "content": prompt}]
     
-    judge_prompt = build_judge_prompt(question, competitors, answers)
-    messages = [{"role": "user", "content": judge_prompt}]
+    return query_openai(evaluator_model, messages)
+
+
+def meta_evaluate(
+    question: str,
+    competitors: list[str],
+    answers: list[str],
+    evaluator_response: str,
+    meta_evaluator_model: str = "claude-opus-4-7"
+) -> str:
+    """
+    Have the meta-evaluator assess the evaluator's response.
     
-    response = client.chat.completions.create(
-        model=judge_model,
-        messages=messages
-    )
+    Returns a score from 0-100.
+    """
+    prompt = build_meta_evaluator_prompt(question, competitors, answers, evaluator_response)
+    messages = [{"role": "user", "content": prompt}]
     
-    result_text = response.choices[0].message.content
-    results_dict = json.loads(result_text)
-    ranks = results_dict["results"]
-    
-    rankings = []
-    for rank_idx in ranks:
-        competitor_idx = int(rank_idx) - 1
-        rankings.append(competitors[competitor_idx])
-    
-    return {
-        "rankings": rankings,
-        "raw_response": results_dict
-    }
+    return query_anthropic(meta_evaluator_model, messages, max_tokens=1000)
