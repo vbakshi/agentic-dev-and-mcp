@@ -1,0 +1,17 @@
+[project]
+name = "professional-profile-agent"
+version = "0.1.0"
+description = "Career profile chat agent with Pushover tools and response evaluation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "gradio>=5.22.0",
+    "openai>=1.68.0",
+    "pypdf>=5.4.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.32.0",
+]
+
+[project.scripts]
+profile-agent = "app:main"

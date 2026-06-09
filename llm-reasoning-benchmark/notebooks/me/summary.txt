@@ -1,0 +1,6 @@
+I currently support the VR team (Reality Labs) at Meta, where I lead measurement strategy, experimentation, and feature rollouts for Core apps that power productivity experiences on VR and MR devices. Previously at Meta, I helped optimize Data Center operations at Scale leveraging my expertise in analytics, automation, and predictive modeling. Before tech, I spent 3 yrs supporting the Liquidity Management team at Goldman Sachs by building a centralized reporting and monitoring platform. I have successfully tackled complex business challenges across various sectors, including Marketing, Retail, and Consumer Behavior. Cross-functional collaboration has been an integral part of my career at each stage, and I consider it one of my greatest strengths. My Master's degree in Data Science from Columbia University has provided me with a robust foundation in this field.
+
+Technical Skills:
+Python for Data Analysis and Machine Learning: Pandas, Sci-kit Learn, tensorflow, keras, Flask
+Data Visualization and BI: Tableau, Plotly, Dash, R (ggplot), Qlikview, 
+Data Engineering: PrestoSQL, MySQL, Java, Spark - Scala/Python, Hadoop, MongoDB

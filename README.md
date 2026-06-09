@@ -7,16 +7,19 @@ A collection of projects exploring agentic AI patterns and Model Context Protoco
 | Project | Description |
 |---------|-------------|
 | [llm-reasoning-benchmark](./llm-reasoning-benchmark/) | Compare reasoning capabilities across different LLMs (GPT, Claude, etc.) using a judge model to rank responses |
+| [professional-profile-agent](./professional-profile-agent/) | Gradio career chat agent with resume context, Pushover tools, and per-response evaluation |
+| [multi-agent-orchestration](./multi-agent-orchestration/) | Sales campaign workflow: writer agents as tools, Emailer handoff, SendGrid delivery |
 
 ## Getting Started
 
 Each project has its own README with setup instructions. Generally:
 
 1. Navigate to the project directory
-2. Create a virtual environment: `python -m venv .venv && source .venv/bin/activate`
-3. Install dependencies: `pip install -r requirements.txt`
-4. Copy `.env.example` to `.env` and add your API keys
-5. Run the project
+2. Copy `.env.example` to `.env` and add your API keys
+3. Install and run (see project README):
+   - **professional-profile-agent:** `uv sync` then `uv run app.py`
+   - **llm-reasoning-benchmark:** `python -m venv .venv`, `pip install -r requirements.txt`
+   - **multi-agent-orchestration:** `uv sync` then `python main.py --dry-run`
 
 ## Tech Stack
 
